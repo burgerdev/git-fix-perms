@@ -1,0 +1,59 @@
+#!/bin/sh
+
+usage() {
+    echo "Usage: git fix-perms [-v|--verbose] [--dry-run]" >&2
+    exit 1
+}
+
+verbose=
+dryrun=
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h)
+      usage
+      ;;
+    --verbose|-v)
+      verbose=true
+      ;;
+    --dry-run)
+      verbose=true
+      dryrun=true
+      ;;
+    *)
+      usage
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+git ls-files -s | 
+while read -r line
+do
+    file=$(echo -n "$line" | cut -f2)
+    mode=$(echo -n "$line" | grep -oE "^[0-9]+")
+    type=$(echo -n "$mode" | head -c2)
+    perm=$(echo -n "$mode" | tail -c4)
+
+    if [ $type != "10" ] || [ ! -f "$file" ]
+    then
+        continue
+    fi
+
+    have_perm=$(stat -c %04a "$file")
+    if [ ${have_perm} = $perm ]
+    then
+        continue
+    fi
+
+    if [ -n $verbose ]
+    then
+        printf "%s: %s -> %s\n" "$file" "${have_perm}" "$perm" >&2
+    fi
+    if [ -z $dryrun ]
+    then
+        chmod "$perm" "$file"
+    fi
+done
